@@ -27,14 +27,17 @@ namespace IdleMaster
         public int totalCardsRemaining;
         public int totalGamesRemaining;
         public String currentAppID;
+
+        public string cookie_sessionid = "";
+        public string cookie_steamLogin = "";
+        public string cookie_profileURL = "";
         
         public CookieContainer generateCookies()
         {
             CookieContainer cookies = new CookieContainer();
             Uri target = new Uri("http://steamcommunity.com");
-            cookies.Add(new Cookie("sessionid", Properties.Settings.Default.sessionid) { Domain = target.Host });
-            cookies.Add(new Cookie("steamLogin", Properties.Settings.Default.steamLogin) { Domain = target.Host });
-            cookies.Add(new Cookie("steamparental", Properties.Settings.Default.steamparental) { Domain = target.Host });
+            cookies.Add(new Cookie("sessionid", cookie_sessionid) { Domain = target.Host });
+            cookies.Add(new Cookie("steamLogin", cookie_steamLogin) { Domain = target.Host });
             return cookies;
         }
 
@@ -191,14 +194,14 @@ namespace IdleMaster
             // Deactivate the timer control and inform the user that the program is finished
             tmrCardDropCheck.Enabled = false;
             lblCurrentStatus.Text = "Idling complete";
+            picIdleStatus.Image = null;
         }
 
-        public async Task<string> GetHttpAsync(String url)
+        public async Task<string> GetHttpAsync(String url, CookieContainer cookies)
         {
             String content = "";
             try
             {
-                CookieContainer cookies = generateCookies();
                 HttpWebRequest r = (HttpWebRequest)WebRequest.Create(url);
                 r.Method = "GET";
                 r.CookieContainer = cookies;            
@@ -227,7 +230,8 @@ namespace IdleMaster
 
         public async Task LoadBadgesAsync()
         {
-            string response = await GetHttpAsync(Properties.Settings.Default.myProfileURL + "/badges/");
+            CookieContainer cookies = generateCookies();
+            string response = await GetHttpAsync(cookie_profileURL + "/badges/", cookies);
             HtmlAgilityPack.HtmlDocument document = new HtmlAgilityPack.HtmlDocument();
             document.LoadHtml(response);
             HtmlNodeCollection user_avatar = document.DocumentNode.SelectNodes("//div[contains(@class,'user_avatar')]");
@@ -238,8 +242,39 @@ namespace IdleMaster
             catch (Exception)
             {
                 // Invalid cookie data
+
+                // Clear the settings
+                cookie_sessionid = "";
+                cookie_steamLogin = "";
+                cookie_profileURL = "";
+
+                // Stop the steam-idle process
+                if (Idle != null)
+                {
+                    stopIdle();
+                }
+
+                // Clear the badges list
+                badgesLeft.Clear();
+
+                // Resize the form
+                Graphics graphics = this.CreateGraphics();
+                double scale = graphics.DpiY * 1.625;
+                this.Height = Convert.ToInt32(scale);
+
+                // Set timer intervals
+                tmrCheckSteam.Interval = 500;
+                tmrCheckCookieData.Interval = 500;
+
+                // Hide lblDrops and lblIdle
+                lblDrops.Visible = false;
+                lblIdle.Visible = false;
+
+                // Set cookieReady to false
                 cookieReady = false;
-                lnkResetCookies_LinkClicked(null, null);
+
+                // Re-enable tmrReadyToGo
+                tmrReadyToGo.Enabled = true; 
                 picReadingPage.Visible = false;
                 return;
             }
@@ -291,7 +326,7 @@ namespace IdleMaster
                 do
                 {
                     i++;
-                    response = await GetHttpAsync(Properties.Settings.Default.myProfileURL + "/badges/?p=" + i);
+                    response = await GetHttpAsync(cookie_profileURL + "/badges/?p=" + i, cookies);
                     document = new HtmlAgilityPack.HtmlDocument();
                     document.LoadHtml(response);
 
@@ -356,7 +391,8 @@ namespace IdleMaster
 
         public async Task checkCardDrops(String appid)
         {
-            string response = await GetHttpAsync(Properties.Settings.Default.myProfileURL + "/gamecards/" + appid + "/");
+            CookieContainer cookies = generateCookies();
+            string response = await GetHttpAsync(cookie_profileURL + "/gamecards/" + appid + "/", cookies);
             HtmlAgilityPack.HtmlDocument document = new HtmlAgilityPack.HtmlDocument();
             document.LoadHtml(response);
             HtmlNodeCollection drops = document.DocumentNode.SelectNodes("//span[contains(@class,'progress_info_bold')]");
@@ -423,12 +459,98 @@ namespace IdleMaster
             }
         }
 
+        public async Task GetLoginDetails()
+        {
+            CookieContainer cookies_prep = new CookieContainer();
+            try
+            {
+                // Get a list of the system's running processes
+                Win32Process.SYSTEM_INFO sysInfo = default(Win32Process.SYSTEM_INFO);
+                while (sysInfo.minimumApplicationAddress.ToInt32() == 0)
+                {
+                    Win32Process.GetSystemInfo(out sysInfo);
+                }
+
+                // Find the exact address of the Steam process
+                IntPtr minAddress = sysInfo.minimumApplicationAddress;
+                long num = (long)minAddress.ToInt32();
+                List<string> list = new List<string>();
+                Process[] processes = Process.GetProcessesByName("steam");
+                Process process = null;
+                for (int i = 0; i < processes.Length; i++)
+                {
+                    foreach (ProcessModule processModule in processes[i].Modules)
+                    {
+                        if (processModule.FileName.EndsWith("steamclient.dll"))
+                        {
+                            process = processes[i];
+                            break;
+                        }
+                    }
+                }
+                if (process != null)
+                {
+                    // Get the Steam process handle
+                    IntPtr process_handle = Win32Process.OpenProcess(1040u, false, process.Id);
+                    Win32Process.PROCESS_QUERY_INFORMATION process_query = default(Win32Process.PROCESS_QUERY_INFORMATION);
+                    IntPtr intPtr = new IntPtr(0);
+                    while (Win32Process.VirtualQueryEx(process_handle, minAddress, out process_query, 28u) != 0)
+                    {
+                        if (process_query.Protect == 4u && process_query.State == 4096u)
+                        {
+                            // Read the Steam process memory stream to extract the steamLogin cookie data
+                            byte[] process_query_size = new byte[process_query.RegionSize];
+                            Win32Process.ReadProcessMemory(process_handle, process_query.BaseAdress, process_query_size, process_query.RegionSize, out intPtr);
+                            string process_memory_string = Encoding.UTF8.GetString(process_query_size);
+                            MatchCollection matches = new Regex("7656119[0-9]{10}%7c%7c[A-F0-9]{40}", RegexOptions.IgnoreCase).Matches(process_memory_string);
+                            if (matches.Count > 0)
+                            {
+                                foreach (Match match in matches)
+                                {
+                                    if (!list.Contains(match.Value))
+                                    {
+                                        list.Add(match.Value);
+                                    }
+                                }
+                            }
+                        }
+                        num += (long)((ulong)process_query.RegionSize);
+                        if (num >= 2147483647L)
+                        {
+                            break;
+                        }
+                        minAddress = new IntPtr(num);
+                    }
+                }
+                cookie_steamLogin = list[0];
+                cookie_profileURL = "http://steamcommunity.com/profiles/" + cookie_steamLogin.Substring(0, 17);
+
+                // Now that we have the steamLogin cookie data, perform a web query and extract the sessionid
+                Uri uri = new Uri("http://steamcommunity.com/");
+                cookies_prep.Add(new Cookie("steamLogin", cookie_steamLogin) { Domain = uri.Host });
+                await GetHttpAsync("http://steamcommunity.com/", cookies_prep);
+                CookieCollection cookies = cookies_prep.GetCookies(new Uri("http://steamcommunity.com/"));
+                for (int i = 0; i < cookies.Count; i++)
+                {
+                    string cookie_name = cookies[i].Name.ToString();
+                    if (cookie_name == "sessionid")
+                    {
+                        cookie_sessionid = cookies[i].Value.ToString();
+                        break;
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
         public frmMain()
         {            
             InitializeComponent();
         }
 
-        private void frmMain_Load(object sender, EventArgs e)
+        private async void frmMain_Load(object sender, EventArgs e)
         {
             // Copy external references to the output directory.  This allows ClickOnce install.
             if (File.Exists(Environment.CurrentDirectory + "\\steam_api.dll") == false)
@@ -459,14 +581,15 @@ namespace IdleMaster
 
             // Set the location of certain elements so that they scale correctly for different DPI settings
             double lblGameName_scale = graphics.DpiX * 1.14;
-            double lnkSignIn_scale = graphics.DpiX * 2.35;
-            double lnkSignOut_scale = graphics.DpiX * 2.15;
+            double lnkRetry_scale = graphics.DpiX * 2.29;
             Point point = new Point(Convert.ToInt32(lblGameName_scale), Convert.ToInt32(lblGameName.Location.Y));
             lblGameName.Location = point;
-            point = new Point(Convert.ToInt32(lnkSignIn_scale), Convert.ToInt32(lnkSignIn.Location.Y));
-            lnkSignIn.Location = point;
-            point = new Point(Convert.ToInt32(lnkSignOut_scale), Convert.ToInt32(lnkResetCookies.Location.Y));
-            lnkResetCookies.Location = point;
+            point = new Point(Convert.ToInt32(lnkRetry_scale), Convert.ToInt32(lnkRetry.Location.Y));
+            lnkRetry.Location = point;
+
+            // Get the user information of the currently logged in Steam user
+            await GetLoginDetails();
+            tmrCheckCookieData.Enabled = true;
         }
 
         private void frmMain_FormClose(object sender, FormClosedEventArgs e)
@@ -483,23 +606,21 @@ namespace IdleMaster
 
         private void tmrCheckCookieData_Tick(object sender, EventArgs e)
         {
-            if (Properties.Settings.Default.sessionid != "" && Properties.Settings.Default.steamLogin != "")
+            if (cookie_sessionid != "" && cookie_steamLogin != "")
             {
                 lblCookieStatus.Text = "Idle Master is connected to Steam";
                 lblCookieStatus.ForeColor = System.Drawing.Color.Green;
                 picCookieStatus.Image = Properties.Resources.imgTrue;
-                lnkSignIn.Visible = false;
-                lnkResetCookies.Visible = true;
                 cookieReady = true;
+                lnkRetry.Visible = false;
             }
             else
             {
-                lblCookieStatus.Text = "Idle Master is not connected to Steam";
+                lblCookieStatus.Text = "Idle Master could not connect to Steam";
                 lblCookieStatus.ForeColor = System.Drawing.Color.Black;
                 picCookieStatus.Image = Properties.Resources.imgFalse;
-                lnkSignIn.Visible = true;
-                lnkResetCookies.Visible = false;
                 cookieReady = false;
+                lnkRetry.Visible = true;
             }
         }
 
@@ -509,67 +630,55 @@ namespace IdleMaster
                 lblSteamStatus.Text = "Steam is running";
                 lblSteamStatus.ForeColor = System.Drawing.Color.Green;
                 picSteamStatus.Image = Properties.Resources.imgTrue;
-                tmrCheckSteam.Interval = 5000;                
+                tmrCheckSteam.Interval = 2500;                
                 skipGameToolStripMenuItem.Enabled = true;
                 pauseIdlingToolStripMenuItem.Enabled = true;
                 steamReady = true;
             }
             else
             {
+                // Alter the GUI
                 lblSteamStatus.Text = "Steam is not running";
                 lblSteamStatus.ForeColor = System.Drawing.Color.Black;
                 picSteamStatus.Image = Properties.Resources.imgFalse;
-                tmrCheckSteam.Interval = 500;
                 skipGameToolStripMenuItem.Enabled = false;
                 pauseIdlingToolStripMenuItem.Enabled = false;
+                picIdleStatus.Image = null;
+
+                // Set the timer interval
+                tmrCheckSteam.Interval = 500;
+                
+                // Stop Idling
+                if (Idle != null)
+                {
+                    stopIdle();
+                }
+
+                // Reset the user data
                 steamReady = false;
+                cookieReady = false;
+                cookie_sessionid = "";
+                cookie_steamLogin = "";
+                cookie_profileURL = "";
+
+                // Resize the form
+                Graphics graphics = this.CreateGraphics();
+                double scale = graphics.DpiY * 1.625;
+                this.Height = Convert.ToInt32(scale);
+
+                // Hide lblDrops and lblIdle
+                lblDrops.Visible = false;
+                lblIdle.Visible = false;
+                
+                // Re-enable tmrReadyToGo
+                tmrReadyToGo.Enabled = true;
+                picReadingPage.Visible = false;
             }
         }
 
         private void lblGameName_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             Process.Start("http://store.steampowered.com/app/" + currentAppID);
-        }
-
-        private void lnkResetCookies_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
-        {
-            // Clear the settings
-            Properties.Settings.Default.sessionid = "";
-            Properties.Settings.Default.steamLogin = "";
-            Properties.Settings.Default.myProfileURL = "";
-            Properties.Settings.Default.steamparental = "";
-            Properties.Settings.Default.Save();
-
-            // Stop the steam-idle process
-            stopIdle();
-
-            // Clear the badges list
-            badgesLeft.Clear();
-
-            // Resize the form
-            Graphics graphics = this.CreateGraphics();
-            double scale = graphics.DpiY * 1.625;
-            this.Height = Convert.ToInt32(scale);
-
-            // Set timer intervals
-            tmrCheckSteam.Interval = 500;
-            tmrCheckCookieData.Interval = 500;
-
-            // Hide lblDrops and lblIdle
-            lblDrops.Visible = false;
-            lblIdle.Visible = false;
-
-            // Set cookieReady to false
-            cookieReady = false;
-
-            // Re-enable tmrReadyToGo
-            tmrReadyToGo.Enabled = true;            
-        }
-
-        private void lnkSignIn_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
-        {            
-            frmBrowser frm = new frmBrowser();
-            frm.ShowDialog();
         }
 
         private void exitToolStripMenuItem_Click(object sender, EventArgs e)
@@ -759,6 +868,14 @@ namespace IdleMaster
                     btnSkip.PerformClick();
                 }
             }
+        }
+
+        private async void lnkRetry_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            // Get the user information of the currently logged in Steam user
+            tmrCheckCookieData.Enabled = false;
+            await GetLoginDetails();
+            tmrCheckCookieData.Enabled = true;
         }
     }
 }

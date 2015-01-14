@@ -34,8 +34,6 @@
             this.tmrCheckCookieData = new System.Windows.Forms.Timer(this.components);
             this.lblSteamStatus = new System.Windows.Forms.Label();
             this.tmrCheckSteam = new System.Windows.Forms.Timer(this.components);
-            this.lnkResetCookies = new System.Windows.Forms.LinkLabel();
-            this.lnkSignIn = new System.Windows.Forms.LinkLabel();
             this.lblDrops = new System.Windows.Forms.Label();
             this.lblIdle = new System.Windows.Forms.Label();
             this.lblCurrentStatus = new System.Windows.Forms.Label();
@@ -68,6 +66,7 @@
             this.picApp = new System.Windows.Forms.PictureBox();
             this.btnPause = new System.Windows.Forms.Button();
             this.btnResume = new System.Windows.Forms.Button();
+            this.lnkRetry = new System.Windows.Forms.LinkLabel();
             this.mnuTop.SuspendLayout();
             this.ssFooter.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.picReadingPage)).BeginInit();
@@ -82,13 +81,12 @@
             this.lblCookieStatus.AutoSize = true;
             this.lblCookieStatus.Location = new System.Drawing.Point(31, 58);
             this.lblCookieStatus.Name = "lblCookieStatus";
-            this.lblCookieStatus.Size = new System.Drawing.Size(186, 13);
+            this.lblCookieStatus.Size = new System.Drawing.Size(193, 13);
             this.lblCookieStatus.TabIndex = 0;
-            this.lblCookieStatus.Text = "Idle Master is not connected to Steam";
+            this.lblCookieStatus.Text = "Idle Master could not connect to Steam";
             // 
             // tmrCheckCookieData
             // 
-            this.tmrCheckCookieData.Enabled = true;
             this.tmrCheckCookieData.Tick += new System.EventHandler(this.tmrCheckCookieData_Tick);
             // 
             // lblSteamStatus
@@ -105,30 +103,6 @@
             this.tmrCheckSteam.Enabled = true;
             this.tmrCheckSteam.Interval = 500;
             this.tmrCheckSteam.Tick += new System.EventHandler(this.tmrCheckSteam_Tick);
-            // 
-            // lnkResetCookies
-            // 
-            this.lnkResetCookies.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.lnkResetCookies.AutoSize = true;
-            this.lnkResetCookies.Location = new System.Drawing.Point(194, 58);
-            this.lnkResetCookies.Name = "lnkResetCookies";
-            this.lnkResetCookies.Size = new System.Drawing.Size(52, 13);
-            this.lnkResetCookies.TabIndex = 4;
-            this.lnkResetCookies.TabStop = true;
-            this.lnkResetCookies.Text = "(Sign out)";
-            this.lnkResetCookies.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.lnkResetCookies_LinkClicked);
-            // 
-            // lnkSignIn
-            // 
-            this.lnkSignIn.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.lnkSignIn.AutoSize = true;
-            this.lnkSignIn.Location = new System.Drawing.Point(204, 58);
-            this.lnkSignIn.Name = "lnkSignIn";
-            this.lnkSignIn.Size = new System.Drawing.Size(45, 13);
-            this.lnkSignIn.TabIndex = 5;
-            this.lnkSignIn.TabStop = true;
-            this.lnkSignIn.Text = "(Sign in)";
-            this.lnkSignIn.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.lnkSignIn_LinkClicked);
             // 
             // lblDrops
             // 
@@ -407,6 +381,19 @@
             this.btnResume.Visible = false;
             this.btnResume.Click += new System.EventHandler(this.btnResume_Click);
             // 
+            // lnkRetry
+            // 
+            this.lnkRetry.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.lnkRetry.AutoSize = true;
+            this.lnkRetry.Location = new System.Drawing.Point(220, 58);
+            this.lnkRetry.Name = "lnkRetry";
+            this.lnkRetry.Size = new System.Drawing.Size(38, 13);
+            this.lnkRetry.TabIndex = 4;
+            this.lnkRetry.TabStop = true;
+            this.lnkRetry.Text = "(Retry)";
+            this.lnkRetry.Visible = false;
+            this.lnkRetry.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.lnkRetry_LinkClicked);
+            // 
             // frmMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -423,8 +410,7 @@
             this.Controls.Add(this.picCookieStatus);
             this.Controls.Add(this.picSteamStatus);
             this.Controls.Add(this.picApp);
-            this.Controls.Add(this.lnkSignIn);
-            this.Controls.Add(this.lnkResetCookies);
+            this.Controls.Add(this.lnkRetry);
             this.Controls.Add(this.lblSteamStatus);
             this.Controls.Add(this.lblCookieStatus);
             this.Controls.Add(this.mnuTop);
@@ -461,8 +447,6 @@
         private System.Windows.Forms.Timer tmrCheckCookieData;
         private System.Windows.Forms.Label lblSteamStatus;
         private System.Windows.Forms.Timer tmrCheckSteam;
-        private System.Windows.Forms.LinkLabel lnkResetCookies;
-        private System.Windows.Forms.LinkLabel lnkSignIn;
         private System.Windows.Forms.PictureBox picApp;
         private System.Windows.Forms.PictureBox picSteamStatus;
         private System.Windows.Forms.PictureBox picCookieStatus;
@@ -495,6 +479,7 @@
         private System.Windows.Forms.NotifyIcon notifyIcon1;
         private System.Windows.Forms.PictureBox picReadingPage;
         private System.Windows.Forms.ToolStripMenuItem blacklistToolStripMenuItem;
+        private System.Windows.Forms.LinkLabel lnkRetry;
 
     }
 }
